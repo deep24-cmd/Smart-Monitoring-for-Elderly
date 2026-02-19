@@ -1,0 +1,123 @@
+#include <Wire.h> 
+#include <LiquidCrystal_I2C.h>
+#include <SoftwareSerial.h>
+
+// SIM800L Setup
+SoftwareSerial sim(2, 3); 
+LiquidCrystal_I2C lcd(0x27, 16, 2); 
+
+const int lm35Pin = A0;
+const int pulsePin = A1;
+const int pirPin = 4;
+const int buzzerPin = 5;
+
+// Pulse Smoothing Variables
+const int numReadings = 15; 
+int readings[numReadings];      
+int readIndex = 0;              
+long total = 0;                  
+int averagePulse = 0;                
+
+String caretakerNumber = "+91XXXXXXXXXX"; // Replace with your number
+unsigned long lastMotionTime = 0;
+bool alertSent = false;
+
+void setup() {
+  Serial.begin(9600);
+  sim.begin(9600); 
+  
+  lcd.init();
+  lcd.backlight();
+  
+  pinMode(pirPin, INPUT);
+  pinMode(buzzerPin, OUTPUT);
+  
+  for (int i = 0; i < numReadings; i++) readings[i] = 0;
+
+  lcd.print("Elderly Monitor");
+  lcd.setCursor(0, 1);
+  lcd.print("System Ready...");
+  
+  delay(10000); // Wait for SIM network
+  sim.println("AT+CMGF=1"); 
+  delay(500);
+  sim.println("AT+CNMI=2,2,0,0,0"); 
+  
+  lcd.clear();
+  lastMotionTime = millis();
+}
+
+void loop() {
+  // 1. Sensor Processing with Noise Reduction
+  total = total - readings[readIndex];
+  readings[readIndex] = analogRead(pulsePin);
+  total = total + readings[readIndex];
+  readIndex = (readIndex + 1) % numReadings;
+  averagePulse = total / numReadings;
+
+  int bpm = 0;
+  if (averagePulse > 150) { 
+    bpm = map(averagePulse, 0, 1023, 0, 220); 
+  }
+
+  float tempRaw = analogRead(lm35Pin);
+  float tempC = (tempRaw * 5.0 * 100.0) / 1024.0;
+  if (tempC < 15.0) tempC = 0.0; 
+
+  // 2. LCD Display Update
+  lcd.setCursor(0, 0);
+  lcd.print("T: "); 
+  if (tempC > 0) { lcd.print(tempC, 1); lcd.print("C  "); }
+  else { lcd.print("No Data"); }
+
+  lcd.setCursor(0, 1);
+  lcd.print("P: "); 
+  if (bpm > 40 && bpm < 160) { lcd.print(bpm); lcd.print(" BPM   "); }
+  else { lcd.print("Searching.."); }
+
+  // 3. Fall & Emergency Logic
+  if (digitalRead(pirPin) == HIGH) {
+    lastMotionTime = millis();
+    alertSent = false;
+  }
+
+  if (millis() - lastMotionTime > 60000 && !alertSent) {
+    triggerAlert("FALL ALERT: No movement for 1 min.");
+    alertSent = true;
+  }
+
+  if (tempC > 38.5) {
+    triggerAlert("HIGH FEVER: " + String(tempC) + "C detected.");
+  }
+
+  // 4. Remote Status Request
+  if (sim.available() > 0) {
+    String msg = sim.readString();
+    msg.toUpperCase();
+    if (msg.indexOf("STATUS") > -1) {
+      String report = "Status: Temp " + String(tempC) + "C, Pulse " + String(bpm) + " BPM";
+      sendSMS(report);
+    }
+  }
+  delay(200); 
+}
+
+void triggerAlert(String msg) {
+  digitalWrite(buzzerPin, HIGH);
+  lcd.setCursor(0, 1);
+  lcd.print("SMS SENDING...");
+  sendSMS(msg);
+  delay(2000);
+  digitalWrite(buzzerPin, LOW);
+}
+
+void sendSMS(String text) {
+  sim.print("AT+CMGS=\"");
+  sim.print(caretakerNumber);
+  sim.println("\"");
+  delay(1000);
+  sim.print(text);
+  delay(500);
+  sim.write(26); 
+  delay(5000);
+}
