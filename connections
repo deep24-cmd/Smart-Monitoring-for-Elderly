@@ -1,0 +1,28 @@
+
+
+1. Communication & Display Connections
+These pins handle the sending of SMS alerts and the local display of data.
+
+Component	Pin	Arduino Pin	Function
+SIM800L Board	GND	GND	Critical: Connects 12V and 5V grounds.
+SIM800L Board	TX	D2	Sends data from GSM to Arduino.
+SIM800L Board	RX	D3	Receives data from Arduino.
+I2C 16x2 LCD	GND	GND	Power ground.
+I2C 16x2 LCD	VCC	5V	5V Power supply.
+I2C 16x2 LCD	SDA	A4	Data line for I2C communication.
+I2C 16x2 LCD	SCL	A5	Clock line for I2C communication.
+2. Health & Safety Sensor Connections
+These sensors capture the vital signs and movement of the individual.
+
+Component	Pin	Arduino Pin	Function
+LM35 (Temp)	Out (Mid)	A0	Analog input for body temperature.
+Pulse Sensor	Signal (S)	A1	Analog input for heart rate.
+PIR Sensor	Out (D)	D4	Digital input for motion/fall detection.
+Buzzer	Pos (+)	D5	Digital output for emergency alarm.
+
+3. Power Supply Setup
+SIM800L Module: Use a 12V 2A Power Adapter plugged directly into the SIM800L power board. This is necessary to handle the high current bursts when the module transmits SMS.
+
+Arduino Uno: Power the Arduino via the USB cable connected to your PC or a 9V battery.
+
+Common Ground Rule: You must connect the GND of the SIM800L power board to the GND of the Arduino. Without this, the RX/TX signals will be corrupted, leading to the "garbage characters" you saw earlier.
